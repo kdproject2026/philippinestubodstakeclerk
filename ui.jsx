@@ -356,6 +356,20 @@
     );
   }
 
+  /* ---- Unit dropdown (stake, wards, branches) ---- */
+  function UnitSelect({ value, onChange, err, extra }) {
+    const options = [...(window.UNITS || [])];
+    (extra || []).forEach((u) => { if (u && !options.includes(u)) options.push(u); });
+    // legacy/custom values stay selectable so existing data never breaks
+    if (value && !options.includes(value)) options.push(value);
+    return (
+      <select className={"select" + (err ? " err" : "")} value={value} onChange={onChange}>
+        <option value="">Select a unit…</option>
+        {options.map((u) => <option key={u} value={u}>{u}</option>)}
+      </select>
+    );
+  }
+
   /* ---- Password field ---- */
   function PwField({ label, value, onChange, placeholder, err, autoFocus }) {
     const [show, setShow] = useState(false);
@@ -529,7 +543,7 @@
                 </div>
                 <div className="field">
                   <label>Unit</label>
-                  <input className="input" value={form.unit} onChange={setF("unit")} placeholder="e.g. Tubod Ward" />
+                  <UnitSelect value={form.unit} onChange={setF("unit")} />
                 </div>
               </div>
               <div className="row2">
@@ -594,7 +608,7 @@
                 </div>
                 <div className="field">
                   <label>Unit</label>
-                  <input className="input" value={form.unit} onChange={setF("unit")} placeholder="e.g. Tubod Stake" />
+                  <UnitSelect value={form.unit} onChange={setF("unit")} />
                 </div>
               </div>
               <div className="field">
@@ -848,7 +862,7 @@
             </div>
             <div className="field">
               <label>Unit</label>
-              <input className="input" value={form.unit} onChange={set("unit")} placeholder="e.g. Tubod Ward" />
+              <UnitSelect value={form.unit} onChange={set("unit")} />
             </div>
             {mode === "add" ? (
               <>
@@ -941,8 +955,7 @@
               </div>
               <div className="field">
                 <label>Unit</label>
-                <input className="input" value={unit} onChange={(e) => setUnit(e.target.value)}
-                  placeholder="e.g. Tubod Ward" />
+                <UnitSelect value={unit} onChange={(e) => setUnit(e.target.value)} />
               </div>
             </div>
           </div>
@@ -1348,7 +1361,7 @@
   }
 
   /* ---------------- Calling modal ---------------- */
-  function CallingModal({ mode, calling, accounts, onSave, onClose }) {
+  function CallingModal({ mode, calling, accounts, units, onSave, onClose }) {
     const STATUSES = ["Active", "Pending Sustaining", "Vacant"];
     const [form, setForm] = useState({
       position:   calling?.position   || "",
@@ -1412,8 +1425,7 @@
               </div>
               <div className="field">
                 <label>Unit <span className="req">*</span></label>
-                <input className={"input" + (err.unit ? " err" : "")} value={form.unit}
-                  onChange={set("unit")} placeholder="e.g. Tubod Ward" />
+                <UnitSelect value={form.unit} onChange={set("unit")} err={err.unit} extra={units} />
                 {err.unit && <span className="errmsg">{err.unit}</span>}
               </div>
             </div>
@@ -1900,6 +1912,7 @@
         )}
         {modal && (
           <CallingModal mode={modal.mode} calling={modal.calling} accounts={accounts}
+            units={[...new Set(callings.map((c) => c.unit))]}
             onSave={(cal, isEdit) => { onSave(cal, isEdit); setModal(null); }}
             onClose={() => setModal(null)} />
         )}

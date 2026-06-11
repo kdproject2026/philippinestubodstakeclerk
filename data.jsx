@@ -51,6 +51,13 @@
   const WARDS    = ["Alegria", "Bad-as", "Kitcharao", "Placer", "Tubod"];
   const BRANCHES = ["Bacuag", "Claver", "Mainit", "Matin-ao"];
 
+  // canonical unit list — used by every Unit dropdown across the portal
+  const UNITS = [
+    ST,
+    ...WARDS.map((w) => w + " Ward"),
+    ...BRANCHES.map((b) => b + " Branch"),
+  ];
+
   const SEED_CALLINGS = [
     /* ── Stake Presidency ── */
     mkC(ST, "Stake President",      "Norman D. Dolorfino", "2024-03-10"),
@@ -83,6 +90,7 @@
   window.SECTIONS = SECTIONS;
   window.SEED_CARDS = SEED_CARDS;
   window.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
+  window.UNITS = UNITS;
   window.SEED_ROLES = SEED_ROLES;
   window.SEED_CALLINGS = SEED_CALLINGS;
   window.PICKER_ICONS = PICKER_ICONS;
