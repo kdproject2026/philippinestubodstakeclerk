@@ -47,6 +47,8 @@
     const [callings, setCallings] = useState([]);
     const [hiddenSections, setHiddenSections] = useState([]);
     const [settings, setSettings] = useState(window.DEFAULT_SETTINGS);
+    const [notifs, setNotifs] = useState([]);
+    const [orgFocus, setOrgFocus] = useState(null);
 
     // ui state
     const [query, setQuery] = useState("");
@@ -111,6 +113,42 @@
     }, [session && session.id]);
 
     const isAdmin = session?.role === "Admin";
+
+    /* ---- notifications feed (admins see everything; others see "all"-audience) ---- */
+    useEffect(() => {
+      if (!session) { setNotifs([]); return; }
+      const col = db.collection("notifications");
+      const q = isAdmin ? col : col.where("audience", "==", "all");
+      return q.onSnapshot((qs) => {
+        const list = qs.docs.map(docData)
+          .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        setNotifs(list.slice(0, 50));
+      }, () => {});
+    }, [session && session.id, isAdmin]);
+
+    const lastReadAt = session?.notifsReadAt || "";
+    const unreadCount = notifs.filter((n) => (n.createdAt || "") > lastReadAt).length;
+    const markNotifsRead = () => {
+      if (!session) return;
+      db.doc("accounts/" + session.id).update({ notifsReadAt: new Date().toISOString() }).catch(() => {});
+    };
+    const pushNotif = (type, title, target, audience) => {
+      db.collection("notifications").add({
+        type, title,
+        target: target || null,
+        audience: audience || "all",
+        createdAt: new Date().toISOString(),
+      }).catch(() => {});
+    };
+    const openNotif = (n) => {
+      const t = n.target || {};
+      if (t.view === "manage-systems") { if (isAdmin) setActive("manage-systems"); return; }
+      if (t.view === "org-chart") {
+        if (t.callingId) setOrgFocus(t.callingId);
+        setActive("org-chart"); return;
+      }
+      if (t.view && SECTIONS.some((s) => s.id === t.view)) setActive(t.view);
+    };
 
     const roleEntry = useMemo(() =>
       session ? (roles.find((r) => r.name === session.calling) || roles.find((r) => r.name === session.role)) : null
@@ -217,6 +255,13 @@
         await sec.firestore().doc("accounts/" + cred.user.uid).set({
           ...data, role: "", status: "pending", createdAt: new Date().toISOString(),
         });
+        await sec.firestore().collection("notifications").add({
+          type: "registration",
+          title: data.fullName + " requested a portal account",
+          target: { view: "manage-systems" },
+          audience: "admins",
+          createdAt: new Date().toISOString(),
+        }).catch(() => {});
         await sec.auth().signOut();
         return null;
       } catch (e) {
@@ -298,8 +343,6 @@
       else { flash("No link set for this tool."); }
     };
 
-    const pendingCount = accounts.filter((a) => (a.status || "active") === "pending").length;
-
     /* ---------------- account actions ---------------- */
     const saveAccount = (account) => {
       db.doc("accounts/" + account.id).set(stripId(account), { merge: true });
@@ -311,6 +354,10 @@
     };
     const approveAccount = (id, data) => {
       db.doc("accounts/" + id).update({ ...data, status: "active" });
+      const who = accounts.find((a) => a.id === id);
+      pushNotif("approval",
+        ((who && who.fullName) || "A new member") + "'s account was approved" + (data.role ? " as " + data.role : ""),
+        { view: "manage-systems" }, "admins");
       flash("Account approved");
     };
 
@@ -326,19 +373,45 @@
 
     /* ---------------- calling actions ---------------- */
     const saveCalling = (calling, isEdit) => {
+      const prev = callings.find((c) => c.id === calling.id);
       db.doc("callings/" + calling.id).set(stripId(calling));
+      // notify only on meaningful changes — not e.g. assignment-chip tweaks
+      const significant = !prev
+        || prev.memberName !== calling.memberName
+        || prev.position   !== calling.position
+        || prev.unit       !== calling.unit
+        || prev.status     !== calling.status;
+      if (significant) {
+        const where = calling.position + " (" + calling.unit + ")";
+        pushNotif("calling",
+          !isEdit
+            ? (calling.memberName ? calling.memberName + " was called as " + where : "New position added: " + where)
+            : (calling.memberName ? calling.memberName + " — " + where + " was updated" : "Calling updated: " + where),
+          { view: "org-chart", callingId: calling.id }, "all");
+      }
       flash(isEdit ? "Calling updated" : "Calling added");
     };
     const deleteCalling = (id) => {
+      const prev = callings.find((c) => c.id === id);
       db.doc("callings/" + id).delete();
+      if (prev) {
+        pushNotif("calling", "Position removed: " + prev.position + " (" + prev.unit + ")",
+          { view: "org-chart" }, "all");
+      }
       flash("Calling removed");
     };
     const releaseCalling = (id) => {
+      const prev = callings.find((c) => c.id === id);
       db.doc("callings/" + id).update({
         memberName: "", userId: "", mrn: "", dateCalled: "",
         dateReleased: new Date().toISOString().slice(0, 10),
         status: "Vacant", notes: "", assignments: [],
       });
+      if (prev && prev.memberName) {
+        pushNotif("release",
+          prev.memberName + " was released as " + prev.position + " (" + prev.unit + ")",
+          { view: "org-chart", callingId: id }, "all");
+      }
       flash("Member released from calling");
     };
 
@@ -420,7 +493,8 @@
       main = (
         <window.OrgChart callings={callings} accounts={activeAccounts}
           canEdit={isAdmin || canEditOrgChart}
-          onSave={saveCalling} onDelete={deleteCalling} onRelease={releaseCalling} />
+          onSave={saveCalling} onDelete={deleteCalling} onRelease={releaseCalling}
+          focusCallingId={orgFocus} onFocusHandled={() => setOrgFocus(null)} />
       );
     } else {
       const s = SECTIONS.find((x) => x.id === active) || SECTIONS[0];
@@ -473,7 +547,8 @@
       <div className="app">
         <window.TopBar theme={theme} onToggleTheme={() => setTheme((t) => t === "dark" ? "light" : "dark")}
           query={query} setQuery={setQuery} searchRef={searchRef}
-          session={session} pendingCount={isAdmin ? pendingCount : 0} onViewPending={() => setActive("manage-systems")}
+          session={session} notifs={notifs} unreadCount={unreadCount} lastReadAt={lastReadAt}
+          onMarkRead={markNotifsRead} onClickNotif={openNotif}
           onSignOut={signOut} />
         <div className="body-row">
           <window.Sidebar sections={visibleSections} active={active} setActive={setActive} counts={counts}

@@ -3,20 +3,50 @@
   const { useState, useEffect, useRef } = React;
   const Icon = window.Icon;
 
+  /* ---------------- Notification helpers ---------------- */
+  const NOTIF_ICONS = { registration: "userPlus", approval: "check", calling: "clipboard", release: "logout" };
+
+  function timeAgo(iso) {
+    if (!iso) return "";
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 60000) return "Just now";
+    const m = Math.floor(ms / 60000);
+    if (m < 60) return m + "m ago";
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + "h ago";
+    const d = Math.floor(h / 24);
+    if (d < 7) return d + "d ago";
+    return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+  }
+
   /* ---------------- TopBar ---------------- */
-  function TopBar({ theme, onToggleTheme, query, setQuery, searchRef, session, pendingCount, onViewPending, onSignOut }) {
+  function TopBar({ theme, onToggleTheme, query, setQuery, searchRef, session, notifs, unreadCount, lastReadAt, onMarkRead, onClickNotif, onSignOut }) {
     const initials = (name) => (name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     const [menuOpen, setMenuOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const [readMark, setReadMark] = useState("");   // read marker frozen when the panel opens
     const menuRef = useRef(null);
+    const notifRef = useRef(null);
 
     useEffect(() => {
-      if (!menuOpen) return;
-      const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-      const k = (e) => { if (e.key === "Escape") setMenuOpen(false); };
+      if (!menuOpen && !notifOpen) return;
+      const h = (e) => {
+        if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+        if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      };
+      const k = (e) => { if (e.key === "Escape") { setMenuOpen(false); setNotifOpen(false); } };
       document.addEventListener("mousedown", h);
       document.addEventListener("keydown", k);
       return () => { document.removeEventListener("mousedown", h); document.removeEventListener("keydown", k); };
-    }, [menuOpen]);
+    }, [menuOpen, notifOpen]);
+
+    const toggleNotifs = () => {
+      setNotifOpen((o) => {
+        if (!o) { setReadMark(lastReadAt || ""); onMarkRead(); }
+        return !o;
+      });
+    };
+    const isUnread = (n) => (n.createdAt || "") > (readMark || "");
 
     return (
       <header className="topbar">
@@ -37,15 +67,40 @@
 
         <div className="topbar-spacer" />
 
-        <div className="icon-wrap">
-          <button className="icon-btn" aria-label="Pending accounts"
-            onClick={pendingCount > 0 ? onViewPending : undefined}
-            style={pendingCount > 0 ? { color: "var(--warn)" } : {}}>
+        <div className="icon-wrap" ref={notifRef}>
+          <button className="icon-btn" aria-label="Notifications" onClick={toggleNotifs}
+            aria-haspopup="true" aria-expanded={notifOpen}
+            style={unreadCount > 0 ? { color: "var(--warn)" } : {}}>
             <Icon name="bell" />
           </button>
-          {pendingCount > 0
-            ? <span className="badge-count">{pendingCount}</span>
+          {unreadCount > 0
+            ? <span className="badge-count">{unreadCount > 9 ? "9+" : unreadCount}</span>
             : <span className="badge-dot" />}
+          {notifOpen && (
+            <div className="notif-panel">
+              <div className="notif-head">Notifications</div>
+              {(!notifs || notifs.length === 0) ? (
+                <div className="notif-empty">
+                  <Icon name="bell" size={24} />
+                  <p>No notifications yet.</p>
+                </div>
+              ) : (
+                <div className="notif-list">
+                  {notifs.map((n) => (
+                    <button key={n.id} className={"notif-item" + (isUnread(n) ? " unread" : "")}
+                      onClick={() => { setNotifOpen(false); onClickNotif(n); }}>
+                      <span className="notif-ic"><Icon name={NOTIF_ICONS[n.type] || "bell"} size={16} sw={1.8} /></span>
+                      <span className="notif-body">
+                        <span className="notif-title">{n.title}</span>
+                        <span className="notif-time">{timeAgo(n.createdAt)}</span>
+                      </span>
+                      {isUnread(n) && <span className="notif-dot" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <button className="icon-btn" onClick={onToggleTheme} aria-label="Toggle theme">
           <Icon name={theme === "dark" ? "sun" : "moon"} />
@@ -1789,12 +1844,20 @@
     );
   }
 
-  function OrgChart({ callings, accounts, canEdit, onSave, onDelete, onRelease }) {
+  function OrgChart({ callings, accounts, canEdit, onSave, onDelete, onRelease, focusCallingId, onFocusHandled }) {
     const [query, setQuery]   = useState("");
     const [detailId, setDetailId] = useState(null);
     const [modal, setModal]   = useState(null);
     const [confirmRelease, setConfirmRelease] = useState(null);
     const [confirmDelete, setConfirmDelete]   = useState(null);
+
+    // deep-link from a notification: open the calling's detail popup
+    useEffect(() => {
+      if (focusCallingId && callings.some((c) => c.id === focusCallingId)) {
+        setDetailId(focusCallingId);
+        onFocusHandled && onFocusHandled();
+      }
+    }, [focusCallingId, callings.length]);
 
     const q = query.trim().toLowerCase();
     const match = (c) => !q || c.position.toLowerCase().includes(q) || c.memberName.toLowerCase().includes(q) || c.unit.toLowerCase().includes(q);

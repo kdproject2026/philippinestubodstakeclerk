@@ -34,8 +34,22 @@ service cloud.firestore {
       allow create: if signedIn() && request.auth.uid == uid
         && !bootstrapped()
         && request.resource.data.role == "Admin";
+      // users may update only their own notification read marker
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notifsReadAt']);
       // admins manage all accounts
       allow create, update, delete: if isAdmin();
+    }
+
+    match /notifications/{id} {
+      // admins see everything; approved users see "all"-audience items
+      allow read: if isAdmin() || (isActive() && resource.data.audience == "all");
+      // registration notices are created by the (still-pending) registrant
+      allow create: if signedIn() && request.resource.data.type == "registration";
+      // calling/approval notices by approved users
+      allow create: if isActive();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
 
     match /roles/{id} {
