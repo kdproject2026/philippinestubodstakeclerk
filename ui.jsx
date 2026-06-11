@@ -356,12 +356,7 @@
     );
   }
 
-  /* ---- Password utilities ---- */
-  async function hashPassword(pw) {
-    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw));
-    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
-
+  /* ---- Password field ---- */
   function PwField({ label, value, onChange, placeholder, err, autoFocus }) {
     const [show, setShow] = useState(false);
     return (
@@ -380,21 +375,24 @@
   }
 
   /* ---------------- Login modal ---------------- */
-  function LoginModal({ accounts, onLogin, onCreateFirst, onRegister }) {
+  function LoginModal({ bootstrapped, onLogin, onRegister, onCreateFirst, onForgot }) {
     // view: "login" | "register" | "registered" | "first-run"
-    const [view, setView]         = useState(accounts.length === 0 ? "first-run" : "login");
+    const [view, setView]         = useState(bootstrapped === false ? "first-run" : "login");
     const [email, setEmail]       = useState("");
     const [password, setPassword] = useState("");
     const [loginErr, setLoginErr] = useState("");
+    const [loginMsg, setLoginMsg] = useState("");
     const [loading, setLoading]   = useState(false);
-    const blank = { fullName: "", email: "", phone: "", mrn: "", calling: "", unit: "", role: "", password: "", confirm: "" };
+    const blank = { fullName: "", email: "", phone: "", mrn: "", calling: "", unit: "", password: "", confirm: "" };
     const [form, setForm] = useState(blank);
     const [err, setErr]   = useState({});
+    const [topErr, setTopErr] = useState("");
 
     const setF = (k) => (e) => {
       const v = e.target.value;
       setForm((f) => ({ ...f, [k]: v }));
       if (err[k]) setErr((er) => { const n = { ...er }; delete n[k]; return n; });
+      if (topErr) setTopErr("");
     };
 
     const Brand = () => (
@@ -409,54 +407,66 @@
       </div>
     );
 
-    /* --- Sign in --- */
-    const handleLogin = async () => {
-      setLoginErr("");
-      if (!email.trim() || !password) { setLoginErr("Email and password are required."); return; }
-      setLoading(true);
-      try {
-        const hash = await hashPassword(password);
-        const account = accounts.find((a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.passwordHash === hash);
-        if (!account) { setLoginErr("Invalid email or password."); return; }
-        if ((account.status || "active") === "pending") {
-          setLoginErr("Your account is pending approval. Please wait for an administrator to confirm it.");
-          return;
-        }
-        onLogin(account);
-      } finally { setLoading(false); }
-    };
+    const profileOf = () => ({
+      fullName: form.fullName.trim(), email: form.email.trim(), phone: form.phone.trim(),
+      mrn: form.mrn.trim(), calling: form.calling.trim(), unit: form.unit.trim(),
+    });
 
-    /* --- First-run setup (no accounts at all; first account is always Admin) --- */
-    const submitFirst = async () => {
+    const validate = () => {
       const e = {};
       if (!form.fullName.trim()) e.fullName = "Full name is required.";
       if (!form.email.trim())    e.email    = "Email is required.";
       if (!form.password)        e.password = "Password is required.";
+      else if (form.password.length < 6) e.password = "Password must be at least 6 characters.";
       if (form.password && form.password !== form.confirm) e.confirm = "Passwords do not match.";
-      if (Object.keys(e).length) { setErr(e); return; }
+      return e;
+    };
+
+    /* --- Sign in --- */
+    const handleLogin = async () => {
+      setLoginErr(""); setLoginMsg("");
+      if (!email.trim() || !password) { setLoginErr("Email and password are required."); return; }
       setLoading(true);
       try {
-        const passwordHash = await hashPassword(form.password);
-        onCreateFirst({ fullName: form.fullName.trim(), email: form.email.trim(), phone: form.phone.trim(), mrn: form.mrn.trim(), calling: form.calling.trim(), unit: form.unit.trim(), role: "Admin", passwordHash, status: "active" });
+        const error = await onLogin(email, password);
+        if (error) setLoginErr(error);
+      } finally { setLoading(false); }
+    };
+
+    /* --- Forgot password --- */
+    const handleForgot = async () => {
+      setLoginErr(""); setLoginMsg("");
+      if (!email.trim()) { setLoginErr("Enter your email above, then click Forgot password."); return; }
+      setLoading(true);
+      try {
+        const error = await onForgot(email);
+        if (error) setLoginErr(error);
+        else setLoginMsg("Password reset email sent to " + email.trim() + ".");
       } finally { setLoading(false); }
     };
 
     /* --- Self-registration (pending approval) --- */
     const submitRegister = async () => {
-      const e = {};
-      if (!form.fullName.trim()) e.fullName = "Full name is required.";
-      if (!form.email.trim())    e.email    = "Email is required.";
-      if (!form.password)        e.password = "Password is required.";
-      if (form.password && form.password !== form.confirm) e.confirm = "Passwords do not match.";
-      if (accounts.some((a) => a.email.toLowerCase() === form.email.trim().toLowerCase()))
-        e.email = "An account with this email already exists.";
+      const e = validate();
       if (Object.keys(e).length) { setErr(e); return; }
       setLoading(true);
       try {
-        const passwordHash = await hashPassword(form.password);
-        onRegister({ id: "u-" + Date.now(), fullName: form.fullName.trim(), email: form.email.trim(), phone: form.phone.trim(), mrn: form.mrn.trim(), calling: form.calling.trim(), unit: form.unit.trim(), role: "", passwordHash, status: "pending" });
+        const error = await onRegister(profileOf(), form.password);
+        if (error) { setTopErr(error); return; }
         setView("registered");
       } finally { setLoading(false); }
+    };
+
+    /* --- First-run setup (first account is always Admin) --- */
+    const submitFirst = async () => {
+      const e = validate();
+      if (Object.keys(e).length) { setErr(e); return; }
+      setLoading(true);
+      try {
+        const error = await onCreateFirst(profileOf(), form.password);
+        if (error) { setTopErr(error); setLoading(false); }
+        // on success the auth listener signs the new admin in
+      } catch { setLoading(false); }
     };
 
     /* ---- Registered success screen ---- */
@@ -471,7 +481,7 @@
               <p className="login-sub">Your account is awaiting approval from an administrator. You will be able to sign in once it is confirmed.</p>
             </div>
             <button className="btn ghost" style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
-              onClick={() => { setView("login"); setForm(blank); setErr({}); }}>
+              onClick={() => { setView("login"); setForm(blank); setErr({}); setTopErr(""); }}>
               Back to Sign In
             </button>
           </div>
@@ -528,12 +538,13 @@
                 <PwField label={<>Confirm Password <span className="req">*</span></>}
                   value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} />
               </div>
+              {topErr && <span className="errmsg">{topErr}</span>}
               <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 2 }}
                 onClick={submitRegister} disabled={loading}>
                 <Icon name="check" size={16} sw={2} /> {loading ? "Submitting…" : "Submit Request"}
               </button>
               <button className="btn ghost" style={{ justifyContent: "center" }}
-                onClick={() => { setView("login"); setForm(blank); setErr({}); }}>
+                onClick={() => { setView("login"); setForm(blank); setErr({}); setTopErr(""); }}>
                 Back to Sign In
               </button>
             </div>
@@ -596,6 +607,7 @@
                 <PwField label={<>Confirm Password <span className="req">*</span></>}
                   value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} />
               </div>
+              {topErr && <span className="errmsg">{topErr}</span>}
               <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 4 }}
                 onClick={submitFirst} disabled={loading}>
                 <Icon name="check" size={16} sw={2} /> {loading ? "Creating…" : "Create Account"}
@@ -617,25 +629,69 @@
             <div className="field">
               <label>Email</label>
               <input className="input" type="email" value={email}
-                onChange={(e) => { setEmail(e.target.value); setLoginErr(""); }}
+                onChange={(e) => { setEmail(e.target.value); setLoginErr(""); setLoginMsg(""); }}
                 placeholder="email@example.com" autoFocus
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
             </div>
             <PwField label="Password" value={password}
-              onChange={(e) => { setPassword(e.target.value); setLoginErr(""); }} />
+              onChange={(e) => { setPassword(e.target.value); setLoginErr(""); setLoginMsg(""); }} />
             {loginErr && <span className="errmsg" style={{ marginTop: -6 }}>{loginErr}</span>}
+            {loginMsg && <span className="hint" style={{ marginTop: -6, color: "var(--good)", fontWeight: 600 }}>{loginMsg}</span>}
             <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 2 }}
               onClick={handleLogin} disabled={loading}>
               {loading ? "Signing in…" : "Sign in"}
             </button>
+            <button className="btn ghost" style={{ justifyContent: "center", height: 30, fontSize: 12.5 }}
+              onClick={handleForgot} disabled={loading}>
+              Forgot password?
+            </button>
             <div className="login-divider" />
             <button className="btn ghost" style={{ justifyContent: "center" }}
-              onClick={() => { setView("register"); setForm(blank); setErr({}); }}>
+              onClick={() => { setView("register"); setForm(blank); setErr({}); setTopErr(""); }}>
               Create an account
             </button>
           </div>
         </div>
       </div>
+    );
+  }
+
+  /* ---------------- LCR prompt (popup after sign-in) ---------------- */
+  function LcrPrompt({ lcrUrl, onClose }) {
+    useEffect(() => {
+      const h = (e) => { if (e.key === "Escape") onClose(); };
+      document.addEventListener("keydown", h);
+      return () => document.removeEventListener("keydown", h);
+    }, []);
+    const openLcr = () => {
+      window.open(lcrUrl || "https://lcr.churchofjesuschrist.org", "_blank", "noopener,noreferrer");
+      onClose();
+    };
+    return (
+      <>
+        <div className="scrim" onClick={onClose} />
+        <div className="modal" style={{ width: "min(430px, calc(100vw - 32px))" }} role="dialog" aria-modal="true">
+          <button className="icon-btn lcr-modal-x" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
+          <div className="modal-body" style={{ paddingTop: 28, paddingBottom: 24 }}>
+            <div className="lcr-gate">
+              <div className="lcr-lock"><Icon name="lock" size={26} sw={1.7} /></div>
+              <h2 className="login-title" style={{ fontSize: 19 }}>Leaders &amp; Clerks Resources login required</h2>
+              <p className="login-sub" style={{ marginBottom: 0 }}>
+                To fully access the portal resources, please log in to the Church's
+                Leaders and Clerks Resources (LCR) system first.
+              </p>
+            </div>
+            <button className="btn primary" style={{ width: "100%", height: 42, justifyContent: "center", marginTop: 20 }}
+              onClick={openLcr}>
+              <Icon name="external" size={16} /> Log in to LCR / Church Resources
+            </button>
+            <button className="btn ghost" style={{ width: "100%", justifyContent: "center", marginTop: 8 }}
+              onClick={onClose}>
+              Continue to portal
+            </button>
+          </div>
+        </div>
+      </>
     );
   }
 
@@ -677,7 +733,7 @@
   }
 
   /* ---------------- Account modal ---------------- */
-  function AccountModal({ mode, account, roles, accounts, onSave, onClose }) {
+  function AccountModal({ mode, account, roles, accounts, onSave, onCreate, onResetPw, onClose }) {
     const roleOptions = ["Admin", ...((roles || []).map((r) => r.name))];
     const [form, setForm] = useState({
       role:     account?.role     || "",
@@ -692,6 +748,7 @@
     });
     const [err, setErr]       = useState({});
     const [saving, setSaving] = useState(false);
+    const [pwSent, setPwSent] = useState(false);
 
     useEffect(() => {
       const h = (e) => { if (e.key === "Escape") onClose(); };
@@ -710,29 +767,33 @@
       if (!form.fullName.trim()) e.fullName = "Full name is required.";
       if (!form.email.trim())    e.email    = "Email is required.";
       if (!form.role)            e.role     = "Role is required.";
-      if (mode === "add" && !form.password)           e.password = "Password is required.";
-      if (form.password && form.password !== form.confirm) e.confirm = "Passwords do not match.";
-      if ((accounts || []).some((a) =>
-        a.email.toLowerCase() === form.email.trim().toLowerCase() && a.id !== account?.id))
-        e.email = "An account with this email already exists.";
+      if (mode === "add") {
+        if (!form.password)                  e.password = "Password is required.";
+        else if (form.password.length < 6)   e.password = "Password must be at least 6 characters.";
+        if (form.password && form.password !== form.confirm) e.confirm = "Passwords do not match.";
+        if ((accounts || []).some((a) =>
+          (a.email || "").toLowerCase() === form.email.trim().toLowerCase()))
+          e.email = "An account with this email already exists.";
+      }
       if (Object.keys(e).length) { setErr(e); return; }
       setSaving(true);
       try {
-        const passwordHash = form.password
-          ? await hashPassword(form.password)
-          : (account?.passwordHash || "");
-        onSave({
-          id:           account ? account.id : "u-" + Date.now(),
-          role:         form.role,
-          fullName:     form.fullName.trim(),
-          email:        form.email.trim(),
-          phone:        form.phone.trim(),
-          mrn:          form.mrn.trim(),
-          calling:      form.calling.trim(),
-          unit:         form.unit.trim(),
-          passwordHash,
-          status:       account?.status || "active",
-        }, mode === "edit");
+        const data = {
+          role:     form.role,
+          fullName: form.fullName.trim(),
+          email:    form.email.trim(),
+          phone:    form.phone.trim(),
+          mrn:      form.mrn.trim(),
+          calling:  form.calling.trim(),
+          unit:     form.unit.trim(),
+        };
+        if (mode === "add") {
+          const error = await onCreate(data, form.password);
+          if (error) { setErr({ email: error }); return; }
+          onClose();
+        } else {
+          onSave({ id: account.id, ...data, status: account?.status || "active" });
+        }
       } finally { setSaving(false); }
     };
 
@@ -765,7 +826,9 @@
               <div className="field">
                 <label>Email <span className="req">*</span></label>
                 <input className={"input" + (err.email ? " err" : "")} type="email" value={form.email}
-                  onChange={set("email")} placeholder="email@example.com" />
+                  onChange={set("email")} placeholder="email@example.com"
+                  disabled={mode === "edit"} style={mode === "edit" ? { opacity: .65 } : null} />
+                {mode === "edit" && <span className="hint">The sign-in email can't be changed here.</span>}
                 {err.email && <span className="errmsg">{err.email}</span>}
               </div>
               <div className="field">
@@ -787,20 +850,31 @@
               <label>Unit</label>
               <input className="input" value={form.unit} onChange={set("unit")} placeholder="e.g. Tubod Ward" />
             </div>
-            <div className="pw-section-divider">
-              {mode === "edit"
-                ? <span>Change password <span style={{ color: "var(--text-3)", fontWeight: 400 }}>— leave blank to keep current</span></span>
-                : <span>Set password <span className="req">*</span></span>}
-            </div>
-            <div className="row2">
-              <PwField
-                label={mode === "add" ? <>{`Password`} <span className="req">*</span></> : "New Password"}
-                value={form.password} onChange={set("password")} err={err.password} />
-              <PwField
-                label={mode === "add" ? <>{`Confirm Password`} <span className="req">*</span></> : "Confirm New Password"}
-                value={form.confirm} onChange={set("confirm")}
-                placeholder="Re-enter password" err={err.confirm} />
-            </div>
+            {mode === "add" ? (
+              <>
+                <div className="pw-section-divider">
+                  <span>Set password <span className="req">*</span></span>
+                </div>
+                <div className="row2">
+                  <PwField label={<>Password <span className="req">*</span></>}
+                    value={form.password} onChange={set("password")} err={err.password} />
+                  <PwField label={<>Confirm Password <span className="req">*</span></>}
+                    value={form.confirm} onChange={set("confirm")}
+                    placeholder="Re-enter password" err={err.confirm} />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="pw-section-divider"><span>Password</span></div>
+                <div className="field">
+                  <span className="hint">Passwords are managed by each user. Send them an email link to set a new one.</span>
+                  <button className="btn" style={{ alignSelf: "flex-start", marginTop: 4 }} disabled={pwSent}
+                    onClick={async () => { const e2 = await onResetPw(form.email); if (!e2) setPwSent(true); }}>
+                    <Icon name="mail" size={15} /> {pwSent ? "Reset email sent ✓" : "Send password reset email"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
           <div className="modal-foot">
             <button className="btn ghost" onClick={onClose}>Cancel</button>
@@ -884,7 +958,7 @@
   }
 
   /* ---------------- Manage Systems page ---------------- */
-  function ManageSystems({ accounts, roles, onSave, onDelete, onApprove, onBack }) {
+  function ManageSystems({ accounts, roles, onSave, onCreate, onDelete, onApprove, onResetPw, onBack }) {
     const [modal, setModal]         = useState(null);
     const [confirmId, setConfirmId] = useState(null);
     const [approving, setApproving] = useState(null);
@@ -1017,7 +1091,8 @@
 
         {modal && (
           <AccountModal mode={modal.mode} account={modal.account} roles={roles} accounts={accounts}
-            onSave={(acc, isEdit) => { onSave(acc, isEdit); setModal(null); }}
+            onSave={(acc) => { onSave(acc); setModal(null); }}
+            onCreate={onCreate} onResetPw={onResetPw}
             onClose={() => setModal(null)} />
         )}
         {approving && (
@@ -1471,6 +1546,69 @@
     );
   }
 
+  /* ---------------- Portal Settings page ---------------- */
+  function PortalSettings({ settings, onSave, onBack }) {
+    const [lcrUrl, setLcrUrl]     = useState(settings.lcrUrl || "");
+    const [showGate, setShowGate] = useState(settings.showLcrGate !== false);
+    const [err, setErr]           = useState("");
+
+    const submit = () => {
+      const url = lcrUrl.trim();
+      if (!url) { setErr("A link is required."); return; }
+      onSave({ ...settings, lcrUrl: url, showLcrGate: showGate });
+    };
+
+    return (
+      <>
+        <div className="ms-breadcrumb">
+          <button className="btn ghost" onClick={onBack} style={{ height: 28, padding: "0 10px", fontSize: 12.5 }}>
+            <span style={{ display: "inline-block", transform: "rotate(180deg)", lineHeight: 0 }}><Icon name="arrowRight" size={13} sw={2} /></span>
+            Admin
+          </button>
+          <span className="ms-breadcrumb-sep">/</span>
+          <span className="ms-breadcrumb-cur">Portal Settings</span>
+        </div>
+
+        <div className="page-head">
+          <div className="h-left">
+            <div className="eyebrow">Admin · Portal Settings</div>
+            <h1 className="page-title">Portal Settings</h1>
+            <p className="page-sub">Configure the LCR reminder shown to users after they sign in.</p>
+          </div>
+        </div>
+
+        <div className="ps-card">
+          <div className="field">
+            <label>LCR / Church Resources link</label>
+            <input className={"input" + (err ? " err" : "")} type="url" value={lcrUrl}
+              onChange={(e) => { setLcrUrl(e.target.value); if (err) setErr(""); }}
+              placeholder="https://lcr.churchofjesuschrist.org" />
+            {err && <span className="errmsg">{err}</span>}
+            <span className="hint">The "Log in to LCR / Church Resources" button in the popup opens this link.</span>
+          </div>
+
+          <div className="cat-row" style={{ marginTop: 4 }}>
+            <div className="cat-icon-wrap"><Icon name="lock" size={18} sw={1.7} /></div>
+            <div className="cat-info">
+              <div className="cat-name">Show LCR reminder after sign-in</div>
+              <div className="cat-desc">Pop up a reminder to log in to LCR each time a user signs in to the portal.</div>
+            </div>
+            <button className={"cat-toggle" + (showGate ? " on" : "")} onClick={() => setShowGate((s) => !s)}
+              aria-label={showGate ? "Disable LCR reminder" : "Enable LCR reminder"}>
+              <span className="cat-knob" />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <button className="btn primary" onClick={submit}>
+              <Icon name="check" size={16} sw={2} /> Save settings
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   /* ---------------- Org Chart ---------------- */
   const POSITION_ORDER = [
     "stake president",
@@ -1652,7 +1790,7 @@
 
     const stakeCallings = visible
       .filter((c) => /stake/i.test(c.unit))
-      .sort((a, b) => positionRank(a.position) - positionRank(b.position));
+      .sort((a, b) => (positionRank(a.position) - positionRank(b.position)) || a.position.localeCompare(b.position, undefined, { numeric: true }));
 
     const unitMap = {};
     visible
@@ -1662,7 +1800,7 @@
         unitMap[c.unit].push(c);
       });
     const units = Object.keys(unitMap).sort();
-    units.forEach((u) => unitMap[u].sort((a, b) => positionRank(a.position) - positionRank(b.position)));
+    units.forEach((u) => unitMap[u].sort((a, b) => (positionRank(a.position) - positionRank(b.position)) || a.position.localeCompare(b.position, undefined, { numeric: true })));
 
     const counts = {
       active:  callings.filter((c) => c.status === "Active").length,
@@ -1781,5 +1919,5 @@
     );
   }
 
-  Object.assign(window, { TopBar, Sidebar, BottomNav, KpiRow, ToolCard, AddTile, CardModal, Drawer, Toast, LoginModal, ManageSystems, RolesPermissions, Categories, OrgChart });
+  Object.assign(window, { TopBar, Sidebar, BottomNav, KpiRow, ToolCard, AddTile, CardModal, Drawer, Toast, LoginModal, LcrPrompt, ManageSystems, RolesPermissions, Categories, PortalSettings, OrgChart });
 })();

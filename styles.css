@@ -820,6 +820,36 @@ button.org-row:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .reg-success h3 { font-size: 17px; font-weight: 700; margin: 0; }
 .reg-success p  { font-size: 13px; color: var(--text-2); margin: 0; }
 
+/* ---- Loading splash ---- */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; background: var(--bg);
+  color: var(--text-3); font-size: 13.5px; font-weight: 500;
+}
+
+/* ---- LCR gate (pre-sign-in) ---- */
+.lcr-gate {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; gap: 12px; padding-top: 4px;
+}
+.lcr-lock {
+  width: 56px; height: 56px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--accent-border);
+}
+.lcr-gate .login-title { font-size: 19px; }
+.lcr-modal-x { position: absolute; top: 10px; right: 10px; z-index: 1; }
+
+/* ---- Portal Settings ---- */
+.ps-card {
+  max-width: 620px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+
 /* ---- Login page divider ---- */
 .login-divider {
   display: flex; align-items: center; gap: 10px;

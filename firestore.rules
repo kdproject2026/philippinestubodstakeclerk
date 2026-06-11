@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function accountPath() {
+      return /databases/$(database)/documents/accounts/$(request.auth.uid);
+    }
+    function myAccount() {
+      return get(accountPath()).data;
+    }
+    function isActive() {
+      return signedIn() && exists(accountPath()) && myAccount().status == "active";
+    }
+    function isAdmin() {
+      return isActive() && myAccount().role == "Admin";
+    }
+    function bootstrapped() {
+      return exists(/databases/$(database)/documents/config/bootstrap);
+    }
+
+    match /accounts/{uid} {
+      // own profile is always readable (needed to check pending status)
+      allow get: if signedIn() && request.auth.uid == uid;
+      // approved users can see colleague profiles
+      allow read: if isActive();
+      // self-registration: create own profile as pending with no role
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.role == "";
+      // first-run bootstrap: the very first account becomes Admin
+      allow create: if signedIn() && request.auth.uid == uid
+        && !bootstrapped()
+        && request.resource.data.role == "Admin";
+      // admins manage all accounts
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /roles/{id} {
+      allow read: if isActive();
+      allow write: if isAdmin() || (signedIn() && !bootstrapped());
+    }
+
+    match /callings/{id} {
+      allow read: if isActive();
+      // edits are gated by role permissions in the app; rules keep outsiders out
+      allow write: if isActive() || (signedIn() && !bootstrapped());
+    }
+
+    match /cards/{id} {
+      allow read: if isActive();
+      allow write: if isAdmin() || (signedIn() && !bootstrapped());
+    }
+
+    match /config/{doc} {
+      // the bootstrap marker is publicly readable so the sign-in screen
+      // knows whether to offer first-time setup (reveals nothing sensitive)
+      allow get: if doc == "bootstrap";
+      allow read: if isActive();
+      allow write: if isAdmin() || (signedIn() && !bootstrapped());
+    }
+  }
+}

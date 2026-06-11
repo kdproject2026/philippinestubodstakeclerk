@@ -53,6 +53,7 @@
     logout: <><path d="M9 21H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3H9"/><path d="M16 16l4-4-4-4M9.5 12H20"/></>,
     help: <><circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1.2.9-1.2 1.6v.4"/><circle cx="11.7" cy="16.6" r="0.6" fill="currentColor" stroke="none"/></>,
     check: <><path d="M5 12.5l4.5 4.5L19 7"/></>,
+    lock: <><rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/><circle cx="12" cy="15.5" r="1.2" fill="currentColor" stroke="none"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     church: <><path d="M12 2.5l2 2v2.5l3 2V21H7V9l3-2V4.5l2-2z"/><path d="M11 2.5h2M10.5 11h3v4h-3z"/><path d="M5 21v-7l2-1.2M19 21v-7l-2-1.2"/></>,
   };

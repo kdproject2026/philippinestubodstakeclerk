@@ -16,7 +16,13 @@
     C("admin", "users",     "User Management",    "Portal accounts and access by individual.",  ""),
     C("admin", "shield",    "Roles & Permissions","Configure access by calling and unit.",       ""),
     C("admin", "dashboard", "Categories",         "Show or hide categories for portal users.",  ""),
+    C("admin", "settings",  "Portal Settings",    "LCR link and sign-in configuration.",        ""),
   ];
+
+  const DEFAULT_SETTINGS = {
+    lcrUrl: "https://lcr.churchofjesuschrist.org",
+    showLcrGate: true,
+  };
 
   const PICKER_ICONS = ["users","wallet","sparkles","book","shield","calendar","file","mail","barChart","pie","mapPin","building","music","graduation","clipboard","settings","handshake","download"];
 
@@ -76,6 +82,7 @@
 
   window.SECTIONS = SECTIONS;
   window.SEED_CARDS = SEED_CARDS;
+  window.DEFAULT_SETTINGS = DEFAULT_SETTINGS;
   window.SEED_ROLES = SEED_ROLES;
   window.SEED_CALLINGS = SEED_CALLINGS;
   window.PICKER_ICONS = PICKER_ICONS;
