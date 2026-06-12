@@ -57,6 +57,7 @@
     const [modal, setModal] = useState(null);
     const [toast, setToast] = useState("");
     const [lcrPrompt, setLcrPrompt] = useState(false);
+    const [visCard, setVisCard] = useState(null);
     const searchRef = useRef(null);
     const toastTimer = useRef(null);
 
@@ -214,11 +215,16 @@
       toastTimer.current = setTimeout(() => setToast(""), 2200);
     };
 
+    // per-user card visibility: admins see everything, others only cards not hidden from them
+    const visibleCards = useMemo(() =>
+      isAdmin ? cards : cards.filter((c) => !(c.hiddenFor || []).includes(session?.id))
+    , [cards, isAdmin, session && session.id]);
+
     const counts = useMemo(() => {
       const o = {};
-      SECTIONS.forEach((s) => o[s.id] = cards.filter((c) => c.section === s.id).length);
+      SECTIONS.forEach((s) => o[s.id] = visibleCards.filter((c) => c.section === s.id).length);
       return o;
-    }, [cards]);
+    }, [visibleCards]);
 
     const q = query.trim().toLowerCase();
     const matches = (c) => !q || c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q);
@@ -447,8 +453,14 @@
       onPin: togglePin,
       onEdit: (c) => { setDrawer(null); setModal({ mode: "edit", card: c }); },
       onDelete: deleteCard,
+      onVisibility: (c) => setVisCard(c),
       menuOpen, setMenuOpen,
       isAdmin,
+    };
+
+    const setCardVisibility = (id, hiddenFor) => {
+      db.doc("cards/" + id).update({ hiddenFor });
+      flash("Visibility updated");
     };
 
     const renderGrid = (list) => (
@@ -498,7 +510,7 @@
       );
     } else {
       const s = SECTIONS.find((x) => x.id === active) || SECTIONS[0];
-      const list = cards.filter((c) => c.section === s.id && matches(c));
+      const list = visibleCards.filter((c) => c.section === s.id && matches(c));
       main = (
         <>
           <div className="page-head">
@@ -569,6 +581,13 @@
             onClose={() => setDrawer(null)}
             onEdit={cardProps.onEdit} onDelete={deleteCard} onPin={togglePin} onLaunch={launch}
             isAdmin={isAdmin} />
+        )}
+        {visCard && isAdmin && (
+          <window.CardVisibilityModal
+            card={cards.find((c) => c.id === visCard.id) || visCard}
+            accounts={accounts}
+            onSave={(id, hiddenFor) => { setCardVisibility(id, hiddenFor); setVisCard(null); }}
+            onClose={() => setVisCard(null)} />
         )}
         {modal && isAdmin && (
           <window.CardModal mode={modal.mode} card={modal.card}

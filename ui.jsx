@@ -188,7 +188,7 @@
   }
 
   /* ---------------- Tool card ---------------- */
-  function ToolCard({ card, onOpen, onPin, onEdit, onDelete, menuOpen, setMenuOpen, isAdmin }) {
+  function ToolCard({ card, onOpen, onPin, onEdit, onDelete, onVisibility, menuOpen, setMenuOpen, isAdmin }) {
     const ref = useRef(null);
     useEffect(() => {
       if (menuOpen !== card.id) return;
@@ -219,6 +219,7 @@
               <button onClick={() => { onOpen(card); setMenuOpen(null); }}><Icon name="external" size={15} /> Open</button>
               <button onClick={() => { onEdit(card); setMenuOpen(null); }}><Icon name="edit" size={15} /> Edit</button>
               <button onClick={() => { onPin(card.id); setMenuOpen(null); }}><Icon name="star" size={15} /> {card.pinned ? "Unpin" : "Pin"}</button>
+              <button onClick={() => { onVisibility(card); setMenuOpen(null); }}><Icon name="eyeOff" size={15} /> Visibility</button>
               <div className="sep" />
               <button className="del" onClick={() => { onDelete(card.id); setMenuOpen(null); }}><Icon name="trash" size={15} /> Remove</button>
             </div>
@@ -232,6 +233,11 @@
           <span className="tool-meta">
             {card.tag && <span className="tag">{card.tag}</span>}
             {card.meta && card.meta !== "—" && <span>{card.meta}</span>}
+            {isAdmin && (card.hiddenFor || []).length > 0 && (
+              <span className="vis-tag" title={"Hidden from " + card.hiddenFor.length + " user" + (card.hiddenFor.length !== 1 ? "s" : "")}>
+                <Icon name="eyeOff" size={11} sw={2.2} /> {card.hiddenFor.length}
+              </span>
+            )}
           </span>
           {card.url
             ? <Icon name="external" size={15} className="tool-go" />
@@ -279,6 +285,7 @@
         meta: meta.trim(), tag: tag.trim(),
         url: url.trim(),
         pinned: card ? card.pinned : false,
+        hiddenFor: card ? (card.hiddenFor || []) : [],
       });
     };
 
@@ -337,6 +344,74 @@
             <button className="btn ghost" onClick={onClose}>Cancel</button>
             <button className="btn primary" onClick={submit}>
               <Icon name="check" size={16} sw={2} /> {mode === "edit" ? "Save changes" : "Add tool"}
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  /* ---------------- Card visibility modal ---------------- */
+  function CardVisibilityModal({ card, accounts, onSave, onClose }) {
+    const [hidden, setHidden] = useState(card.hiddenFor || []);
+
+    useEffect(() => {
+      const h = (e) => { if (e.key === "Escape") onClose(); };
+      document.addEventListener("keydown", h);
+      return () => document.removeEventListener("keydown", h);
+    }, []);
+
+    // admins always see every tool, so only non-admin active users are listed
+    const list = accounts
+      .filter((a) => (a.status || "active") === "active" && a.role !== "Admin")
+      .sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
+
+    const toggle = (id) =>
+      setHidden((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+    const initials = (name) => (name || "?").split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
+    return (
+      <>
+        <div className="scrim" onClick={onClose} />
+        <div className="modal" style={{ width: "min(480px, calc(100vw - 32px))" }} role="dialog" aria-modal="true">
+          <div className="modal-head">
+            <h3>Visibility — {card.title}</h3>
+            <button className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
+          </div>
+          <div className="modal-body">
+            <span className="hint">
+              Checked users will <strong>not</strong> see this tool, even when they can access its tab.
+              Admins always see every tool.
+            </span>
+            {list.length === 0 ? (
+              <div className="empty" style={{ padding: "26px 16px" }}>
+                <Icon name="users" size={22} className="e-ic" />
+                <p>No non-admin users yet.</p>
+              </div>
+            ) : (
+              <div className="vis-list">
+                {list.map((a) => {
+                  const isHidden = hidden.includes(a.id);
+                  return (
+                    <label key={a.id} className={"vis-row" + (isHidden ? " hidden" : "")}>
+                      <input type="checkbox" checked={isHidden} onChange={() => toggle(a.id)} />
+                      <span className="mp-avatar">{initials(a.fullName)}</span>
+                      <span className="vis-info">
+                        <span className="vis-name">{a.fullName}</span>
+                        <span className="vis-meta">{[a.role, a.unit].filter(Boolean).join(" · ")}</span>
+                      </span>
+                      {isHidden && <span className="vis-state"><Icon name="eyeOff" size={13} sw={2} /> Hidden</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="modal-foot">
+            <button className="btn ghost" onClick={onClose}>Cancel</button>
+            <button className="btn primary" onClick={() => onSave(card.id, hidden)}>
+              <Icon name="check" size={16} sw={2} /> Save visibility
             </button>
           </div>
         </div>
@@ -1995,5 +2070,5 @@
     );
   }
 
-  Object.assign(window, { TopBar, Sidebar, BottomNav, KpiRow, ToolCard, AddTile, CardModal, Drawer, Toast, LoginModal, LcrPrompt, ManageSystems, RolesPermissions, Categories, PortalSettings, OrgChart });
+  Object.assign(window, { TopBar, Sidebar, BottomNav, KpiRow, ToolCard, AddTile, CardModal, CardVisibilityModal, Drawer, Toast, LoginModal, LcrPrompt, ManageSystems, RolesPermissions, Categories, PortalSettings, OrgChart });
 })();

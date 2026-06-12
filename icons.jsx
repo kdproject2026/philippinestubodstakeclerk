@@ -54,6 +54,7 @@
     help: <><circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.2 2.4c-.7.3-1.2.9-1.2 1.6v.4"/><circle cx="11.7" cy="16.6" r="0.6" fill="currentColor" stroke="none"/></>,
     check: <><path d="M5 12.5l4.5 4.5L19 7"/></>,
     lock: <><rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/><circle cx="12" cy="15.5" r="1.2" fill="currentColor" stroke="none"/></>,
+    eyeOff: <><path d="M4 4l16 16"/><path d="M10.6 6.1c.5-.1.9-.1 1.4-.1 6 0 9.5 6 9.5 6a17.6 17.6 0 0 1-2.7 3.4M7 7.4C4.1 9.3 2.5 12 2.5 12S6 18 12 18c1.5 0 2.8-.4 4-1"/><path d="M10 10a2.8 2.8 0 0 0 4 4"/></>,
     menu: <><path d="M4 7h16M4 12h16M4 17h16"/></>,
     church: <><path d="M12 2.5l2 2v2.5l3 2V21H7V9l3-2V4.5l2-2z"/><path d="M11 2.5h2M10.5 11h3v4h-3z"/><path d="M5 21v-7l2-1.2M19 21v-7l-2-1.2"/></>,
   };
