@@ -501,14 +501,15 @@
   }
 
   /* ---- Password field ---- */
-  function PwField({ label, value, onChange, placeholder, err, autoFocus }) {
+  function PwField({ label, value, onChange, placeholder, err, autoFocus, autoComplete, onKeyDown }) {
     const [show, setShow] = useState(false);
     return (
       <div className="field">
         <label>{label}</label>
         <div className="pw-wrap">
           <input className={"input" + (err ? " err" : "")} type={show ? "text" : "password"}
-            value={value} onChange={onChange} placeholder={placeholder || ""} autoFocus={autoFocus} autoComplete="off" />
+            value={value} onChange={onChange} placeholder={placeholder || ""} autoFocus={autoFocus}
+            autoComplete={autoComplete || "off"} onKeyDown={onKeyDown} />
           <button type="button" className="pw-eye" onClick={() => setShow((s) => !s)} tabIndex={-1}>
             {show ? "Hide" : "Show"}
           </button>
@@ -646,30 +647,30 @@
                 <div className="field">
                   <label>Full Name <span className="req">*</span></label>
                   <input className={"input" + (err.fullName ? " err" : "")} value={form.fullName} onChange={setF("fullName")}
-                    placeholder="e.g. Juan dela Cruz" autoFocus />
+                    placeholder="e.g. Juan dela Cruz" autoFocus autoComplete="name" />
                   {err.fullName && <span className="errmsg">{err.fullName}</span>}
                 </div>
                 <div className="field">
                   <label>Email <span className="req">*</span></label>
                   <input className={"input" + (err.email ? " err" : "")} type="email" value={form.email} onChange={setF("email")}
-                    placeholder="email@example.com" />
+                    placeholder="email@example.com" autoComplete="email" />
                   {err.email && <span className="errmsg">{err.email}</span>}
                 </div>
               </div>
               <div className="row2">
                 <div className="field">
                   <label>Phone</label>
-                  <input className="input" value={form.phone} onChange={setF("phone")} placeholder="+63 912 000 0000" />
+                  <input className="input" value={form.phone} onChange={setF("phone")} placeholder="+63 912 000 0000" autoComplete="tel" />
                 </div>
                 <div className="field">
                   <label>MRN</label>
-                  <input className="input" value={form.mrn} onChange={setF("mrn")} placeholder="Member Record No." />
+                  <input className="input" value={form.mrn} onChange={setF("mrn")} placeholder="Member Record No." autoComplete="off" />
                 </div>
               </div>
               <div className="row2">
                 <div className="field">
                   <label>Calling</label>
-                  <input className="input" value={form.calling} onChange={setF("calling")} placeholder="e.g. Ward Clerk" />
+                  <input className="input" value={form.calling} onChange={setF("calling")} placeholder="e.g. Ward Clerk" autoComplete="off" name="church-calling" />
                 </div>
                 <div className="field">
                   <label>Unit</label>
@@ -678,9 +679,9 @@
               </div>
               <div className="row2">
                 <PwField label={<>Password <span className="req">*</span></>}
-                  value={form.password} onChange={setF("password")} err={err.password} />
+                  value={form.password} onChange={setF("password")} err={err.password} autoComplete="new-password" />
                 <PwField label={<>Confirm Password <span className="req">*</span></>}
-                  value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} />
+                  value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} autoComplete="new-password" />
               </div>
               {topErr && <span className="errmsg">{topErr}</span>}
               <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 2 }}
@@ -710,7 +711,7 @@
                 <div className="field">
                   <label>Full Name <span className="req">*</span></label>
                   <input className={"input" + (err.fullName ? " err" : "")} value={form.fullName} onChange={setF("fullName")}
-                    placeholder="e.g. Juan dela Cruz" autoFocus />
+                    placeholder="e.g. Juan dela Cruz" autoFocus autoComplete="name" />
                   {err.fullName && <span className="errmsg">{err.fullName}</span>}
                 </div>
                 <div className="field">
@@ -723,18 +724,18 @@
                 <div className="field">
                   <label>Email <span className="req">*</span></label>
                   <input className={"input" + (err.email ? " err" : "")} type="email" value={form.email} onChange={setF("email")}
-                    placeholder="email@example.com" />
+                    placeholder="email@example.com" autoComplete="email" />
                   {err.email && <span className="errmsg">{err.email}</span>}
                 </div>
                 <div className="field">
                   <label>Phone</label>
-                  <input className="input" value={form.phone} onChange={setF("phone")} placeholder="+63 912 000 0000" />
+                  <input className="input" value={form.phone} onChange={setF("phone")} placeholder="+63 912 000 0000" autoComplete="tel" />
                 </div>
               </div>
               <div className="row2">
                 <div className="field">
                   <label>Calling</label>
-                  <input className="input" value={form.calling} onChange={setF("calling")} placeholder="e.g. Stake Clerk" />
+                  <input className="input" value={form.calling} onChange={setF("calling")} placeholder="e.g. Stake Clerk" autoComplete="off" name="church-calling" />
                 </div>
                 <div className="field">
                   <label>Unit</label>
@@ -747,9 +748,9 @@
               </div>
               <div className="row2">
                 <PwField label={<>Password <span className="req">*</span></>}
-                  value={form.password} onChange={setF("password")} err={err.password} />
+                  value={form.password} onChange={setF("password")} err={err.password} autoComplete="new-password" />
                 <PwField label={<>Confirm Password <span className="req">*</span></>}
-                  value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} />
+                  value={form.confirm} onChange={setF("confirm")} placeholder="Re-enter password" err={err.confirm} autoComplete="new-password" />
               </div>
               {topErr && <span className="errmsg">{topErr}</span>}
               <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 4 }}
@@ -774,11 +775,12 @@
               <label>Email</label>
               <input className="input" type="email" value={email}
                 onChange={(e) => { setEmail(e.target.value); setLoginErr(""); setLoginMsg(""); }}
-                placeholder="email@example.com" autoFocus
+                placeholder="email@example.com" autoFocus autoComplete="email"
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
             </div>
-            <PwField label="Password" value={password}
-              onChange={(e) => { setPassword(e.target.value); setLoginErr(""); setLoginMsg(""); }} />
+            <PwField label="Password" value={password} autoComplete="current-password"
+              onChange={(e) => { setPassword(e.target.value); setLoginErr(""); setLoginMsg(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
             {loginErr && <span className="errmsg" style={{ marginTop: -6 }}>{loginErr}</span>}
             {loginMsg && <span className="hint" style={{ marginTop: -6, color: "var(--good)", fontWeight: 600 }}>{loginMsg}</span>}
             <button className="btn primary" style={{ height: 40, justifyContent: "center", marginTop: 2 }}
